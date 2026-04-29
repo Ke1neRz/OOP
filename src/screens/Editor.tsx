@@ -7,6 +7,7 @@ import {
   type LineAlg,
   type RGBA,
 } from "../lib/raster/RasterRenderer";
+import { Rect, Line, Oval, type Shape } from "../lib/shapes";
 
 export default function Editor() {
   const navigate = useNavigate();
@@ -15,6 +16,57 @@ export default function Editor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<RasterRenderer | null>(null);
   const [lineAlg, setLineAlg] = useState<LineAlg>("bresenham");
+  const [shapes] = useState<Shape[]>(() => {
+    // Create demo shapes
+    const shapeList: Shape[] = [];
+
+    // Rectangle
+    const rect = new Rect("rect1", 80, 60);
+    rect.transform.x = 150;
+    rect.transform.y = 150;
+    rect.fillStyle = "#FF6B6B";
+    rect.strokeStyle = "#000000";
+    rect.strokeWidth = 2;
+    shapeList.push(rect);
+
+    // Line
+    const line = new Line("line1", 50, 50, 250, 150);
+    line.strokeStyle = "#4ECDC4";
+    line.strokeWidth = 3;
+    shapeList.push(line);
+
+    // Oval
+    const oval = new Oval("oval1", 80, 60);
+    oval.transform.x = 350;
+    oval.transform.y = 150;
+    oval.fillStyle = "#FFD93D";
+    oval.strokeStyle = "#000000";
+    oval.strokeWidth = 2;
+    shapeList.push(oval);
+
+    // Another rotated rectangle
+    const rect2 = new Rect("rect2", 100, 80);
+    rect2.transform.x = 150;
+    rect2.transform.y = 300;
+    rect2.transform.rotation = Math.PI / 6;
+    rect2.fillStyle = "#95E1D3";
+    rect2.strokeStyle = "#000000";
+    rect2.strokeWidth = 2;
+    shapeList.push(rect2);
+
+    // Scaled oval
+    const oval2 = new Oval("oval2", 100, 50);
+    oval2.transform.x = 350;
+    oval2.transform.y = 300;
+    oval2.transform.scaleX = 1.2;
+    oval2.transform.scaleY = 0.8;
+    oval2.fillStyle = "#A8E6CF";
+    oval2.strokeStyle = "#000000";
+    oval2.strokeWidth = 2;
+    shapeList.push(oval2);
+
+    return shapeList;
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,11 +88,6 @@ export default function Editor() {
       ro.observe(canvas);
     }
 
-    const black: RGBA = { r: 0, g: 0, b: 0, a: 255 };
-    const red: RGBA = { r: 235, g: 60, b: 60, a: 255 };
-    const blue: RGBA = { r: 55, g: 110, b: 240, a: 255 };
-    const redA: RGBA = { r: 255, g: 0, b: 0, a: 140 };
-
     let raf = 0;
     const frame = () => {
       const r = rendererRef.current;
@@ -49,6 +96,16 @@ export default function Editor() {
 
         const w = r.width;
         const h = r.height;
+
+        // Draw demo shapes
+        for (const shape of shapes) {
+          shape.drawRaster(r);
+        }
+
+        const black: RGBA = { r: 0, g: 0, b: 0, a: 255 };
+        const red: RGBA = { r: 235, g: 60, b: 60, a: 255 };
+        const blue: RGBA = { r: 55, g: 110, b: 240, a: 255 };
+        const redA: RGBA = { r: 255, g: 0, b: 0, a: 140 };
 
         const tri = [
           { x: w * 0.2, y: h * 0.18 },
