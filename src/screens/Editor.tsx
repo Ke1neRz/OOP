@@ -7,7 +7,15 @@ import {
   type LineAlg,
   type RGBA,
 } from "../lib/raster/RasterRenderer";
-import { Rect, Line, Oval, type Shape } from "../lib/shapes";
+import {
+  Rect,
+  Line,
+  Oval,
+  QuadraticBezier,
+  CubicBezier,
+  PathBezier,
+  type Shape,
+} from "../lib/shapes";
 
 export default function Editor() {
   const navigate = useNavigate();
@@ -65,6 +73,46 @@ export default function Editor() {
     oval2.strokeWidth = 2;
     shapeList.push(oval2);
 
+    // Lab 6 curves (top-right, ordered top-to-bottom)
+    const petalRadius = 90;
+    const petalSteps = 120;
+    const petalOffset = Math.PI / 6;
+    const t0 = petalOffset;
+    const r0 = petalRadius * Math.cos(3 * t0);
+    const x0 = r0 * Math.cos(t0);
+    const y0 = r0 * Math.sin(t0);
+    const pathBezier = new PathBezier("path1", x0, y0);
+    for (let i = 1; i <= petalSteps; i++) {
+      const t = petalOffset + (i / petalSteps) * Math.PI * 2;
+      const r = petalRadius * Math.cos(3 * t);
+      const x = r * Math.cos(t);
+      const y = r * Math.sin(t);
+      pathBezier.addLine(x, y);
+    }
+    pathBezier.strokeStyle = "#000000";
+    pathBezier.strokeWidth = 2;
+    shapeList.push(pathBezier);
+
+    const quadBezier = new QuadraticBezier("quad1", -90, 0, 0, -80, 90, 0);
+    quadBezier.strokeStyle = "#000000";
+    quadBezier.strokeWidth = 2;
+    shapeList.push(quadBezier);
+
+    const cubicBezier = new CubicBezier(
+      "cubic1",
+      -90,
+      0,
+      -30,
+      -60,
+      30,
+      60,
+      90,
+      0
+    );
+    cubicBezier.strokeStyle = "#000000";
+    cubicBezier.strokeWidth = 2;
+    shapeList.push(cubicBezier);
+
     return shapeList;
   });
 
@@ -78,9 +126,57 @@ export default function Editor() {
     renderer.setLineAlgorithm(lineAlg);
     rendererRef.current = renderer;
 
+    const positionLab6Shapes = () => {
+      const path = shapes.find((shape) => shape.id === "path1");
+      const quad = shapes.find((shape) => shape.id === "quad1");
+      const cubic = shapes.find((shape) => shape.id === "cubic1");
+      if (!path || !quad || !cubic) {
+        return;
+      }
+
+      const r = rendererRef.current;
+      if (!r) {
+        return;
+      }
+
+      const margin = Math.max(16, Math.round(24 * r.dpr));
+      const gap = Math.max(Math.round(18 * r.dpr), Math.round(r.height * 0.04));
+
+      const size = (shape: Shape) => {
+        const b = shape.getLocalBounds();
+        return {
+          halfW: (b.maxX - b.minX) / 2,
+          halfH: (b.maxY - b.minY) / 2,
+        };
+      };
+
+      const p = size(path);
+      const q = size(quad);
+      const c = size(cubic);
+      const maxHalfW = Math.max(p.halfW, q.halfW, c.halfW);
+
+      const maxRightX = r.width - margin - maxHalfW;
+      const minRightX = margin + maxHalfW;
+      const rightX = maxRightX >= minRightX ? maxRightX : minRightX;
+
+      const place = (shape: Shape, cx: number, cy: number, halfW: number, halfH: number) => {
+        shape.setBounds(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
+      };
+
+      let y = margin + p.halfH;
+      place(path, rightX, y, p.halfW, p.halfH);
+      y += p.halfH + q.halfH + gap;
+      place(quad, rightX, y, q.halfW, q.halfH);
+      y += q.halfH + c.halfH + gap;
+      place(cubic, rightX, y, c.halfW, c.halfH);
+    };
+
     const ro = new ResizeObserver(() => {
       renderer.resize();
+      positionLab6Shapes();
     });
+
+    positionLab6Shapes();
 
     if (containerRef.current) {
       ro.observe(containerRef.current);
@@ -106,6 +202,20 @@ export default function Editor() {
         const red: RGBA = { r: 235, g: 60, b: 60, a: 255 };
         const blue: RGBA = { r: 55, g: 110, b: 240, a: 255 };
         const redA: RGBA = { r: 255, g: 0, b: 0, a: 140 };
+
+        const quad = shapes.find((shape) => shape.id === "quad1");
+        if (quad instanceof QuadraticBezier) {
+          const q0 = quad.transformPointToDevice(quad.x0, quad.y0);
+          const q2 = quad.transformPointToDevice(quad.x2, quad.y2);
+          r.drawLine(q0.x, q0.y, q2.x, q2.y, black);
+        }
+
+        const cubic = shapes.find((shape) => shape.id === "cubic1");
+        if (cubic instanceof CubicBezier) {
+          const c0 = cubic.transformPointToDevice(cubic.x0, cubic.y0);
+          const c3 = cubic.transformPointToDevice(cubic.x3, cubic.y3);
+          r.drawLine(c0.x, c0.y, c3.x, c3.y, black);
+        }
 
         const tri = [
           { x: w * 0.2, y: h * 0.18 },
