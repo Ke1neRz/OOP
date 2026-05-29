@@ -14,6 +14,7 @@ export class QuadraticBezier extends Shape {
   y1: number;
   x2: number; // End point
   y2: number;
+  flatness: number;
 
   constructor(
     id: string,
@@ -22,7 +23,8 @@ export class QuadraticBezier extends Shape {
     x1: number = 0,
     y1: number = -50,
     x2: number = 50,
-    y2: number = 0
+    y2: number = 0,
+    flatness: number = 1
   ) {
     super(id);
 
@@ -39,12 +41,13 @@ export class QuadraticBezier extends Shape {
     this.y2 = y2 - cy;
 
     this.strokeWidth = 2; // Default stroke for curves
+    this.flatness = flatness;
   }
 
   /**
-   * Evaluate the Bezier curve at parameter t ∈ [0, 1]
+   * Evaluate the Bezier curve at parameter t ∈ [0, 1] in local coordinates
    */
-  private evaluatePoint(t: number): { x: number; y: number } {
+  evalLocal(t: number): { x: number; y: number } {
     const mt = 1 - t;
     const mt2 = mt * mt;
     const t2 = t * t;
@@ -59,27 +62,32 @@ export class QuadraticBezier extends Shape {
   }
 
   /**
-   * Get all points along the curve for rendering
+   * Get all points along the curve for rendering (local coordinates)
    */
-  private getCurvePoints(resolution: number = 50): [number, number][] {
+  private getCurvePoints(): [number, number][] {
+    const chord = Math.hypot(this.x2 - this.x0, this.y2 - this.y0);
+    const resolution = Math.max(20, Math.min(100, Math.ceil(chord / this.flatness)));
     const points: [number, number][] = [];
     for (let i = 0; i <= resolution; i++) {
       const t = i / resolution;
-      const p = this.evaluatePoint(t);
+      const p = this.evalLocal(t);
       points.push([p.x, p.y]);
     }
     return points;
   }
 
   /**
+   * Approximate the curve as a polyline in device (screen) coordinates
+   */
+  flattenDevicePoints(): { x: number; y: number }[] {
+    return this.getCurvePoints().map(([x, y]) => this.transformPointToDevice(x, y));
+  }
+
+  /**
    * Draw the Bezier curve on the raster renderer
    */
   drawRaster(r: RasterRenderer): void {
-    const resolution = Math.max(20, Math.min(100, Math.ceil(Math.sqrt(
-      (this.x2 - this.x0) ** 2 + (this.y2 - this.y0) ** 2
-    ) * 2)));
-
-    const curvePoints = this.getCurvePoints(resolution);
+    const curvePoints = this.getCurvePoints();
     const screenPoints = curvePoints.map(([x, y]) => this.transformPointToDevice(x, y));
 
     const strokeColor = hexToRGBA(this.strokeStyle, Math.round(this.strokeOpacity * 255));
@@ -115,8 +123,7 @@ export class QuadraticBezier extends Shape {
     const local = this.transformPointToLocal(px, py);
     const tolerance = this.strokeWidth + 2; // Use stroke width as tolerance
     
-    const resolution = 50;
-    const curvePoints = this.getCurvePoints(resolution);
+    const curvePoints = this.getCurvePoints();
 
     for (let i = 0; i < curvePoints.length - 1; i++) {
       const [x1, y1] = curvePoints[i];
@@ -164,8 +171,7 @@ export class QuadraticBezier extends Shape {
    * Get bounds in device (screen) coordinates
    */
   getBounds(): Bounds {
-    const resolution = 50;
-    const curvePoints = this.getCurvePoints(resolution);
+    const curvePoints = this.getCurvePoints();
     const screenPoints = curvePoints.map(([x, y]) => this.transformPointToDevice(x, y));
 
     let minX = screenPoints[0].x;
@@ -247,6 +253,7 @@ export class QuadraticBezier extends Shape {
       strokeStyle: this.strokeStyle,
       strokeWidth: this.strokeWidth,
       strokeOpacity: this.strokeOpacity,
+      flatness: this.flatness,
     };
   }
 }

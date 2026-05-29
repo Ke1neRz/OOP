@@ -13,6 +13,8 @@ export class Triangle extends Shape {
   y2: number;
   x3: number;
   y3: number;
+  centerX: number;
+  centerY: number;
 
   constructor(
     id: string,
@@ -24,11 +26,13 @@ export class Triangle extends Shape {
     y3: number = 50
   ) {
     super(id);
-    
+
     // Calculate the center of the triangle
     const cx = (x1 + x2 + x3) / 3;
     const cy = (y1 + y2 + y3) / 3;
-    
+    this.centerX = cx;
+    this.centerY = cy;
+
     // Store vertices relative to center (in local coordinates)
     this.x1 = x1 - cx;
     this.y1 = y1 - cy;
@@ -104,8 +108,9 @@ export class Triangle extends Shape {
     const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
     const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
     const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
-    
-    return (u >= 0) && (v >= 0) && (u + v <= 1);
+
+    const EPS = 1e-9;
+    return (u >= -EPS) && (v >= -EPS) && (u + v <= 1 + EPS);
   }
 
   /**
@@ -149,18 +154,14 @@ export class Triangle extends Shape {
    * Create a clone of this triangle
    */
   protected createClone(): Shape {
-    const center = {
-      x: (this.x1 + this.x2 + this.x3) / 3,
-      y: (this.y1 + this.y2 + this.y3) / 3,
-    };
     return new Triangle(
       this.id,
-      this.x1 + center.x,
-      this.y1 + center.y,
-      this.x2 + center.x,
-      this.y2 + center.y,
-      this.x3 + center.x,
-      this.y3 + center.y
+      this.x1 + this.centerX,
+      this.y1 + this.centerY,
+      this.x2 + this.centerX,
+      this.y2 + this.centerY,
+      this.x3 + this.centerX,
+      this.y3 + this.centerY
     );
   }
 
@@ -168,19 +169,15 @@ export class Triangle extends Shape {
    * Serialize to JSON
    */
   toJSON(): ShapeJSON {
-    const center = {
-      x: (this.x1 + this.x2 + this.x3) / 3,
-      y: (this.y1 + this.y2 + this.y3) / 3,
-    };
     return {
       id: this.id,
       type: 'Triangle',
-      x1: this.x1 + center.x,
-      y1: this.y1 + center.y,
-      x2: this.x2 + center.x,
-      y2: this.y2 + center.y,
-      x3: this.x3 + center.x,
-      y3: this.y3 + center.y,
+      x1: this.x1 + this.centerX,
+      y1: this.y1 + this.centerY,
+      x2: this.x2 + this.centerX,
+      y2: this.y2 + this.centerY,
+      x3: this.x3 + this.centerX,
+      y3: this.y3 + this.centerY,
       transform: { ...this.transform },
       fillStyle: this.fillStyle,
       fillOpacity: this.fillOpacity,

@@ -74,21 +74,19 @@ export default function Editor() {
     shapeList.push(oval2);
 
     // Lab 6 curves (top-right, ordered top-to-bottom)
+    // Three-petal rose via Catmull-Rom spline (real smooth curve, not a hard-coded polyline)
     const petalRadius = 90;
-    const petalSteps = 120;
+    const petalCount = 12;
     const petalOffset = Math.PI / 6;
-    const t0 = petalOffset;
-    const r0 = petalRadius * Math.cos(3 * t0);
-    const x0 = r0 * Math.cos(t0);
-    const y0 = r0 * Math.sin(t0);
-    const pathBezier = new PathBezier("path1", x0, y0);
-    for (let i = 1; i <= petalSteps; i++) {
-      const t = petalOffset + (i / petalSteps) * Math.PI * 2;
+    const anchors: { x: number; y: number }[] = [];
+    for (let i = 0; i < petalCount; i++) {
+      const t = petalOffset + (i / petalCount) * Math.PI * 2;
       const r = petalRadius * Math.cos(3 * t);
       const x = r * Math.cos(t);
       const y = r * Math.sin(t);
-      pathBezier.addLine(x, y);
+      anchors.push({ x, y });
     }
+    const pathBezier = new PathBezier("path1", anchors, "catmull", true);
     pathBezier.strokeStyle = "#000000";
     pathBezier.strokeWidth = 2;
     shapeList.push(pathBezier);

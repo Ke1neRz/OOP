@@ -16,6 +16,7 @@ export class CubicBezier extends Shape {
   y2: number;
   x3: number; // End point
   y3: number;
+  flatness: number;
 
   constructor(
     id: string,
@@ -26,7 +27,8 @@ export class CubicBezier extends Shape {
     x2: number = 25,
     y2: number = -50,
     x3: number = 50,
-    y3: number = 0
+    y3: number = 0,
+    flatness: number = 1
   ) {
     super(id);
 
@@ -45,18 +47,19 @@ export class CubicBezier extends Shape {
     this.y3 = y3 - cy;
 
     this.strokeWidth = 2; // Default stroke for curves
+    this.flatness = flatness;
   }
 
   /**
-   * Evaluate the Bezier curve at parameter t ∈ [0, 1]
+   * Evaluate the Bezier curve at parameter t ∈ [0, 1] in local coordinates
    */
-  private evaluatePoint(t: number): { x: number; y: number } {
+  evalLocal(t: number): { x: number; y: number } {
     const mt = 1 - t;
     const mt2 = mt * mt;
     const mt3 = mt2 * mt;
     const t2 = t * t;
     const t3 = t2 * t;
-    
+
     const a = mt3; // (1-t)³
     const b = 3 * mt2 * t; // 3*(1-t)²*t
     const c = 3 * mt * t2; // 3*(1-t)*t²
@@ -69,27 +72,32 @@ export class CubicBezier extends Shape {
   }
 
   /**
-   * Get all points along the curve for rendering
+   * Get all points along the curve for rendering (local coordinates)
    */
-  private getCurvePoints(resolution: number = 60): [number, number][] {
+  private getCurvePoints(): [number, number][] {
+    const chord = Math.hypot(this.x3 - this.x0, this.y3 - this.y0);
+    const resolution = Math.max(30, Math.min(120, Math.ceil(chord / this.flatness)));
     const points: [number, number][] = [];
     for (let i = 0; i <= resolution; i++) {
       const t = i / resolution;
-      const p = this.evaluatePoint(t);
+      const p = this.evalLocal(t);
       points.push([p.x, p.y]);
     }
     return points;
   }
 
   /**
+   * Approximate the curve as a polyline in device (screen) coordinates
+   */
+  flattenDevicePoints(): { x: number; y: number }[] {
+    return this.getCurvePoints().map(([x, y]) => this.transformPointToDevice(x, y));
+  }
+
+  /**
    * Draw the Bezier curve on the raster renderer
    */
   drawRaster(r: RasterRenderer): void {
-    const resolution = Math.max(30, Math.min(120, Math.ceil(Math.sqrt(
-      (this.x3 - this.x0) ** 2 + (this.y3 - this.y0) ** 2
-    ) * 3)));
-
-    const curvePoints = this.getCurvePoints(resolution);
+    const curvePoints = this.getCurvePoints();
     const screenPoints = curvePoints.map(([x, y]) => this.transformPointToDevice(x, y));
 
     const strokeColor = hexToRGBA(this.strokeStyle, Math.round(this.strokeOpacity * 255));
@@ -127,8 +135,7 @@ export class CubicBezier extends Shape {
     const local = this.transformPointToLocal(px, py);
     const tolerance = this.strokeWidth + 2;
 
-    const resolution = 60;
-    const curvePoints = this.getCurvePoints(resolution);
+    const curvePoints = this.getCurvePoints();
 
     for (let i = 0; i < curvePoints.length - 1; i++) {
       const [x1, y1] = curvePoints[i];
@@ -176,8 +183,7 @@ export class CubicBezier extends Shape {
    * Get bounds in device (screen) coordinates
    */
   getBounds(): Bounds {
-    const resolution = 60;
-    const curvePoints = this.getCurvePoints(resolution);
+    const curvePoints = this.getCurvePoints();
     const screenPoints = curvePoints.map(([x, y]) => this.transformPointToDevice(x, y));
 
     let minX = screenPoints[0].x;
@@ -263,6 +269,7 @@ export class CubicBezier extends Shape {
       strokeStyle: this.strokeStyle,
       strokeWidth: this.strokeWidth,
       strokeOpacity: this.strokeOpacity,
+      flatness: this.flatness,
     };
   }
 }
