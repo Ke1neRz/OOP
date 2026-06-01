@@ -161,7 +161,7 @@ export abstract class Shape {
   /**
    * Invalidate cached matrices when transform changes
    */
-  protected invalidateMatrices(): void {
+  public invalidateMatrices(): void {
     this.localToDeviceMatrix = null;
     this.deviceToLocalMatrix = null;
   }
