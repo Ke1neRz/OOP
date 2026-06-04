@@ -24,7 +24,9 @@ import {
   PathBezier,
   type Shape,
   type Bounds,
+  shapeFromJSON,
 } from "../lib/shapes";
+import { saveProject, loadProject, isTauriAvailable } from "../lib/projectStorage";
 
 type Tool =
   | "select"
@@ -221,84 +223,6 @@ function drawSelectionUI(r: RasterRenderer, shape: Shape) {
   }
 }
 
-function makeInitialShapes(): Shape[] {
-  const shapes: Shape[] = [];
-
-  const rect = new Rect("rect1", 80, 60);
-  rect.transform.x = 150;
-  rect.transform.y = 150;
-  rect.fillStyle = "#FF6B6B";
-  rect.strokeStyle = "#000000";
-  rect.strokeWidth = 2;
-  shapes.push(rect);
-
-  const line = new Line("line1", 50, 50, 250, 150);
-  line.strokeStyle = "#4ECDC4";
-  line.strokeWidth = 3;
-  shapes.push(line);
-
-  const oval = new Oval("oval1", 80, 60);
-  oval.transform.x = 350;
-  oval.transform.y = 150;
-  oval.fillStyle = "#FFD93D";
-  oval.strokeStyle = "#000000";
-  oval.strokeWidth = 2;
-  shapes.push(oval);
-
-  const rect2 = new Rect("rect2", 100, 80);
-  rect2.transform.x = 150;
-  rect2.transform.y = 300;
-  rect2.transform.rotation = Math.PI / 6;
-  rect2.fillStyle = "#95E1D3";
-  rect2.strokeStyle = "#000000";
-  rect2.strokeWidth = 2;
-  shapes.push(rect2);
-
-  const oval2 = new Oval("oval2", 100, 50);
-  oval2.transform.x = 350;
-  oval2.transform.y = 300;
-  oval2.transform.scaleX = 1.2;
-  oval2.transform.scaleY = 0.8;
-  oval2.fillStyle = "#A8E6CF";
-  oval2.strokeStyle = "#000000";
-  oval2.strokeWidth = 2;
-  shapes.push(oval2);
-
-  const petalRadius = 90;
-  const petalCount = 12;
-  const petalOffset = Math.PI / 6;
-  const anchors: { x: number; y: number }[] = [];
-  for (let i = 0; i < petalCount; i++) {
-    const t = petalOffset + (i / petalCount) * Math.PI * 2;
-    const r = petalRadius * Math.cos(3 * t);
-    const x = r * Math.cos(t);
-    const y = r * Math.sin(t);
-    anchors.push({ x, y });
-  }
-  const pathBezier = new PathBezier("path1", anchors, "catmull", true);
-  pathBezier.transform.x = 550;
-  pathBezier.transform.y = 200;
-  pathBezier.strokeStyle = "#000000";
-  pathBezier.strokeWidth = 2;
-  shapes.push(pathBezier);
-
-  const quadBezier = new QuadraticBezier("quad1", -90, 0, 0, -80, 90, 0);
-  quadBezier.transform.x = 550;
-  quadBezier.transform.y = 350;
-  quadBezier.strokeStyle = "#000000";
-  quadBezier.strokeWidth = 2;
-  shapes.push(quadBezier);
-
-  const cubicBezier = new CubicBezier("cubic1", -90, 0, -30, -60, 30, 60, 90, 0);
-  cubicBezier.transform.x = 550;
-  cubicBezier.transform.y = 500;
-  cubicBezier.strokeStyle = "#000000";
-  cubicBezier.strokeWidth = 2;
-  shapes.push(cubicBezier);
-
-  return shapes;
-}
-
 export default function Editor() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -307,7 +231,7 @@ export default function Editor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<RasterRenderer | null>(null);
 
-  const [shapes, setShapes] = useState<Shape[]>(makeInitialShapes);
+  const [shapes, setShapes] = useState<Shape[]>([]);
   const shapesRef = useRef<Shape[]>(shapes);
   shapesRef.current = shapes;
 
@@ -320,6 +244,8 @@ export default function Editor() {
   toolRef.current = tool;
 
   const [lineAlg, setLineAlg] = useState<LineAlg>("bresenham");
+  const [projectName, setProjectName] = useState<string>("");
+  const [saveStatus, setSaveStatus] = useState<string>("");
 
   const interactionRef = useRef<{
     mode: InteractionMode;
@@ -352,6 +278,28 @@ export default function Editor() {
     startAngle: 0,
     startCpLocal: null,
   });
+
+  // Load project when id changes
+  useEffect(() => {
+    if (!id) return;
+    loadProject(id).then((proj) => {
+      if (proj) {
+        setProjectName(proj.name);
+        setLineAlg(proj.lineAlgorithm);
+        const restored = proj.shapes
+          .map(shapeFromJSON)
+          .filter((s): s is Shape => s !== null);
+        setShapes(restored);
+        shapesRef.current = restored;
+        setSelectedId(null);
+      } else {
+        setProjectName(`Project ${id}`);
+        setShapes([]);
+        shapesRef.current = [];
+        setSelectedId(null);
+      }
+    });
+  }, [id]);
 
   // Keyboard: Delete
   useEffect(() => {
@@ -816,6 +764,18 @@ export default function Editor() {
 
   const isToolActive = (t: Tool) => tool === t;
 
+  const handleSave = async () => {
+    if (!id) return;
+    try {
+      await saveProject(id, projectName || `Project ${id}`, lineAlg, shapesRef.current);
+      setSaveStatus("Сохранено");
+      setTimeout(() => setSaveStatus(""), 2000);
+    } catch (e) {
+      setSaveStatus("Ошибка сохранения");
+      setTimeout(() => setSaveStatus(""), 2000);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -832,10 +792,13 @@ export default function Editor() {
           >
             Назад
           </button>
-          <div className="flex items-center gap-4">
-            <h1 className="text-sm font-semibold">
-              Редактирование проекта #{id}
-            </h1>
+          <div className="flex items-center gap-4 flex-1 mx-4">
+            <input
+              className="bg-slate-800 text-white px-3 py-1 rounded text-sm w-48"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="Название проекта"
+            />
             <div className="flex gap-2 text-sm">
               <button
                 className={`px-3 py-1 rounded border ${
@@ -859,13 +822,24 @@ export default function Editor() {
               </button>
             </div>
           </div>
-          <button
-            className="bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all px-4 py-2 rounded text-sm"
-            onClick={() => navigate("/")}
-          >
-            Сохранить
-          </button>
+          <div className="flex items-center gap-2">
+            {saveStatus && (
+              <span className="text-xs text-green-400">{saveStatus}</span>
+            )}
+            <button
+              className="bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all px-4 py-2 rounded text-sm"
+              onClick={handleSave}
+            >
+              Сохранить
+            </button>
+          </div>
         </header>
+
+        {!isTauriAvailable() && (
+          <div className="px-4 py-1 bg-yellow-700/40 text-yellow-200 text-xs border-b border-yellow-600/50">
+            Демо-режим (браузер). Для работы с файловой системой запустите <code className="bg-yellow-900/50 px-1 rounded">npm run tauri dev</code>.
+          </div>
+        )}
 
         <div className="flex flex-1 overflow-hidden">
           {/* Toolbar */}
